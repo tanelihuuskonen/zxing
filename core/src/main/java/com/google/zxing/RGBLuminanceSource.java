@@ -41,6 +41,9 @@ public final class RGBLuminanceSource extends LuminanceSource {
 
     // In order to measure pure decoding speed, we convert the entire image to a greyscale array
     // up front, which is the same as the Y channel of the YUVLuminanceSource in the real app.
+    if (pixels.length < width * height) {
+      throw new IllegalArgumentException("Data length too small: " + pixels.length + " < " + width + " * " + height);
+    }
     luminances = new byte[width * height];
     for (int y = 0; y < height; y++) {
       int offset = y * width;
