@@ -163,9 +163,8 @@ public final class BitArray implements Cloneable {
     for (int i = firstInt; i <= lastInt; i++) {
       int firstBit = i > firstInt ? 0 : start & 0x1F;
       int lastBit = i < lastInt ? 31 : end & 0x1F;
-      // Ones from firstBit to lastBit, inclusive
-      int mask = (2 << lastBit) - (1 << firstBit);
-      bits[i] |= mask;
+      // Set bits from firstBit to lastBit, inclusive
+      bits[i] |= (2 << lastBit) - (1 << firstBit);
     }
   }
 
