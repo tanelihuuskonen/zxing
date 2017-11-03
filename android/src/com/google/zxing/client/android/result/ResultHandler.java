@@ -16,6 +16,7 @@
 
 package com.google.zxing.client.android.result;
 
+import android.telephony.PhoneNumberUtils;
 import com.google.zxing.Result;
 import com.google.zxing.client.android.Contents;
 import com.google.zxing.client.android.Intents;
@@ -200,7 +201,7 @@ public abstract class ResultHandler {
     // Only use the first name in the array, if present.
     Intent intent = new Intent(Intent.ACTION_INSERT_OR_EDIT, ContactsContract.Contacts.CONTENT_URI);
     intent.setType(ContactsContract.Contacts.CONTENT_ITEM_TYPE);
-    putExtra(intent, ContactsContract.Intents.Insert.NAME, names != null ? names[0] : null);
+    putExtra(intent, ContactsContract.Intents.Insert.NAME, names != null && names.length > 0 ? names[0] : null);
 
     putExtra(intent, ContactsContract.Intents.Insert.PHONETIC_NAME, pronunciation);
 
@@ -269,7 +270,7 @@ public abstract class ResultHandler {
     if (note != null) {
       aggregatedNotes.append('\n').append(note);
     }
-    if (geo != null) {
+    if (geo != null && geo.length >= 2) {
       aggregatedNotes.append('\n').append(geo[0]).append(',').append(geo[1]);
     }
 
@@ -349,7 +350,7 @@ public abstract class ResultHandler {
     sendSMSFromUri("smsto:" + phoneNumber, body);
   }
 
-  final void sendSMSFromUri(String uri, String body) {
+  private void sendSMSFromUri(String uri, String body) {
     Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse(uri));
     putExtra(intent, "sms_body", body);
     // Exit the app once the SMS is sent
@@ -361,7 +362,7 @@ public abstract class ResultHandler {
     sendMMSFromUri("mmsto:" + phoneNumber, subject, body);
   }
 
-  final void sendMMSFromUri(String uri, String subject, String body) {
+  private void sendMMSFromUri(String uri, String subject, String body) {
     Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse(uri));
     // The Messaging app needs to see a valid subject or else it will treat this an an SMS.
     if (subject == null || subject.isEmpty()) {
@@ -450,7 +451,7 @@ public abstract class ResultHandler {
    */
   final void rawLaunchIntent(Intent intent) {
     if (intent != null) {
-      intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+      intent.addFlags(Intents.FLAG_NEW_DOC);
       Log.d(TAG, "Launching intent: " + intent + " with extras: " + intent.getExtras());
       activity.startActivity(intent);
     }
@@ -508,6 +509,11 @@ public abstract class ResultHandler {
     }
     // Replace %s last as it might contain itself %f or %t
     return url.replace("%s", text);
+  }
+
+  static String formatPhone(String phoneData) {
+    // Just collect the call to a deprecated method in one place
+    return PhoneNumberUtils.formatNumber(phoneData);
   }
 
 }

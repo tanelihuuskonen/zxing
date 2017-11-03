@@ -51,7 +51,7 @@ public final class ITFReader extends OneDReader {
   private static final int N = 1; // Pixed width of a narrow line
 
   /** Valid ITF lengths. Anything longer than the largest value is also allowed. */
-  private static final int[] DEFAULT_ALLOWED_LENGTHS = { 6, 8, 10, 12, 14 };
+  private static final int[] DEFAULT_ALLOWED_LENGTHS = {6, 8, 10, 12, 14};
 
   // Stores the actual narrow line width of the image being decoded.
   private int narrowLineWidth = -1;
@@ -126,8 +126,8 @@ public final class ITFReader extends OneDReader {
     return new Result(
         resultString,
         null, // no natural byte representation for these barcodes
-        new ResultPoint[] { new ResultPoint(startRange[1], (float) rowNumber),
-                            new ResultPoint(endRange[0], (float) rowNumber)},
+        new ResultPoint[] {new ResultPoint(startRange[1], rowNumber),
+                           new ResultPoint(endRange[0], rowNumber)},
         BarcodeFormat.ITF);
   }
 
@@ -180,7 +180,7 @@ public final class ITFReader extends OneDReader {
    * @return Array, containing index of start of 'start block' and end of
    *         'start block'
    */
-  int[] decodeStart(BitArray row) throws NotFoundException {
+  private int[] decodeStart(BitArray row) throws NotFoundException {
     int endStart = skipWhiteSpace(row);
     int[] startPattern = findGuardPattern(row, endStart, START_PATTERN);
 
@@ -252,7 +252,7 @@ public final class ITFReader extends OneDReader {
    * @return Array, containing index of start of 'end block' and end of 'end
    *         block'
    */
-  int[] decodeEnd(BitArray row) throws NotFoundException {
+  private int[] decodeEnd(BitArray row) throws NotFoundException {
 
     // For convenience, reverse the row and then
     // search from 'the start' for the end block
@@ -300,7 +300,7 @@ public final class ITFReader extends OneDReader {
     int counterPosition = 0;
     int patternStart = rowOffset;
     for (int x = rowOffset; x < width; x++) {
-      if (row.get(x) ^ isWhite) {
+      if (row.get(x) != isWhite) {
         counters[counterPosition]++;
       } else {
         if (counterPosition == patternLength - 1) {
@@ -308,9 +308,9 @@ public final class ITFReader extends OneDReader {
             return new int[]{patternStart, x};
           }
           patternStart += counters[0] + counters[1];
-          System.arraycopy(counters, 2, counters, 0, patternLength - 2);
-          counters[patternLength - 2] = 0;
-          counters[patternLength - 1] = 0;
+          System.arraycopy(counters, 2, counters, 0, counterPosition - 1);
+          counters[counterPosition - 1] = 0;
+          counters[counterPosition] = 0;
           counterPosition--;
         } else {
           counterPosition++;

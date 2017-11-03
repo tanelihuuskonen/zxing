@@ -34,6 +34,7 @@ import com.google.zxing.client.android.camera.open.OpenCamera;
  * A class which deals with reading, parsing, and setting the camera parameters which are used to
  * configure the camera hardware.
  */
+@SuppressWarnings("deprecation") // camera APIs
 final class CameraConfigurationManager {
 
   private static final String TAG = "CameraConfiguration";
@@ -220,7 +221,7 @@ final class CameraConfigurationManager {
     if (camera != null) {
       Camera.Parameters parameters = camera.getParameters();
       if (parameters != null) {
-        String flashMode = camera.getParameters().getFlashMode();
+        String flashMode = parameters.getFlashMode();
         return flashMode != null &&
             (Camera.Parameters.FLASH_MODE_ON.equals(flashMode) ||
              Camera.Parameters.FLASH_MODE_TORCH.equals(flashMode));

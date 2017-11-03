@@ -41,10 +41,10 @@ public class DataCharacter {
   public final String toString() {
     return value + "(" + checksumPortion + ')';
   }
-  
+
   @Override
   public final boolean equals(Object o) {
-    if(!(o instanceof DataCharacter)) {
+    if (!(o instanceof DataCharacter)) {
       return false;
     }
     DataCharacter that = (DataCharacter) o;

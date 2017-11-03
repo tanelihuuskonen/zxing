@@ -39,7 +39,7 @@ public final class MultiFormatOneDReader extends OneDReader {
   private final OneDReader[] readers;
 
   public MultiFormatOneDReader(Map<DecodeHintType,?> hints) {
-    @SuppressWarnings("unchecked")    
+    @SuppressWarnings("unchecked")
     Collection<BarcodeFormat> possibleFormats = hints == null ? null :
         (Collection<BarcodeFormat>) hints.get(DecodeHintType.POSSIBLE_FORMATS);
     boolean useCode39CheckDigit = hints != null &&
@@ -70,7 +70,7 @@ public final class MultiFormatOneDReader extends OneDReader {
       if (possibleFormats.contains(BarcodeFormat.RSS_14)) {
          readers.add(new RSS14Reader());
       }
-      if (possibleFormats.contains(BarcodeFormat.RSS_EXPANDED)){
+      if (possibleFormats.contains(BarcodeFormat.RSS_EXPANDED)) {
         readers.add(new RSSExpandedReader());
       }
     }
