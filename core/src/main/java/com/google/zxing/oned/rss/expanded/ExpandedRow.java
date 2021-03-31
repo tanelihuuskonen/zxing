@@ -43,10 +43,6 @@ final class ExpandedRow {
     return this.rowNumber;
   }
 
-  boolean isReversed() {
-    return this.wasReversed;
-  }
-
   boolean isEquivalent(List<ExpandedPair> otherPairs) {
     return this.pairs.equals(otherPairs);
   }
@@ -65,7 +61,7 @@ final class ExpandedRow {
       return false;
     }
     ExpandedRow that = (ExpandedRow) o;
-    return this.pairs.equals(that.getPairs()) && wasReversed == that.wasReversed;
+    return this.pairs.equals(that.pairs) && wasReversed == that.wasReversed;
   }
 
   @Override

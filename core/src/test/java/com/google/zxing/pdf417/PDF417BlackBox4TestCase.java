@@ -40,7 +40,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -52,7 +51,7 @@ import java.util.logging.Logger;
 /**
  * This class tests Macro PDF417 barcode specific functionality. It ensures that information, which is split into
  * several barcodes can be properly combined again to yield the original data content.
- * 
+ *
  * @author Guenther Grau
  */
 public final class PDF417BlackBox4TestCase extends AbstractBlackBoxTestCase {
@@ -64,16 +63,12 @@ public final class PDF417BlackBox4TestCase extends AbstractBlackBoxTestCase {
 
   public PDF417BlackBox4TestCase() {
     super("src/test/resources/blackbox/pdf417-4", null, BarcodeFormat.PDF_417);
-    testResults.add(new TestResult(2, 2, 0, 0, 0.0f));
+    testResults.add(new TestResult(3, 3, 0, 0, 0.0f));
   }
 
   @Test
   @Override
   public void testBlackBox() throws IOException {
-    testPDF417BlackBoxCountingResults(true);
-  }
-
-  private void testPDF417BlackBoxCountingResults(boolean assertOnFailure) throws IOException {
     assertFalse(testResults.isEmpty());
 
     Map<String,List<Path>> imageFiles = getImageFileLists();
@@ -113,14 +108,7 @@ public final class PDF417BlackBox4TestCase extends AbstractBlackBoxTestCase {
             // ignore
           }
         }
-        Collections.sort(results, new Comparator<Result>() {
-          @Override
-          public int compare(Result arg0, Result arg1) {
-            PDF417ResultMetadata resultMetadata = getMeta(arg0);
-            PDF417ResultMetadata otherResultMetadata = getMeta(arg1);
-            return resultMetadata.getSegmentIndex() - otherResultMetadata.getSegmentIndex();
-          }
-        });
+        results.sort(Comparator.comparingInt((Result r) -> getMeta(r).getSegmentIndex()));
         StringBuilder resultText = new StringBuilder();
         String fileId = null;
         for (Result result : results) {
@@ -165,13 +153,11 @@ public final class PDF417BlackBox4TestCase extends AbstractBlackBoxTestCase {
     }
 
     // Then run through again and assert if any failed
-    if (assertOnFailure) {
-      for (int x = 0; x < testCount; x++) {
-        TestResult testResult = testResults.get(x);
-        String label = "Rotation " + testResult.getRotation() + " degrees: Too many images failed";
-        assertTrue(label, passedCounts[x] >= testResult.getMustPassCount());
-        assertTrue("Try harder, " + label, tryHarderCounts[x] >= testResult.getTryHarderCount());
-      }
+    for (int x = 0; x < testCount; x++) {
+      TestResult testResult = testResults.get(x);
+      String label = "Rotation " + testResult.getRotation() + " degrees: Too many images failed";
+      assertTrue(label, passedCounts[x] >= testResult.getMustPassCount());
+      assertTrue("Try harder, " + label, tryHarderCounts[x] >= testResult.getTryHarderCount());
     }
   }
 
@@ -194,11 +180,7 @@ public final class PDF417BlackBox4TestCase extends AbstractBlackBoxTestCase {
     for (Path file : getImageFiles()) {
       String testImageFileName = file.getFileName().toString();
       String fileBaseName = testImageFileName.substring(0, testImageFileName.indexOf('-'));
-      List<Path> files = result.get(fileBaseName);
-      if (files == null) {
-        files = new ArrayList<>();
-        result.put(fileBaseName, files);
-      }
+      List<Path> files = result.computeIfAbsent(fileBaseName, k -> new ArrayList<>());
       files.add(file);
     }
     return result;

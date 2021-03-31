@@ -38,7 +38,6 @@ import com.google.common.io.Resources;
 import com.google.common.net.HttpHeaders;
 import com.google.common.net.MediaType;
 
-import java.awt.color.CMMException;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
@@ -63,6 +62,7 @@ import java.util.Timer;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 import javax.servlet.RequestDispatcher;
@@ -70,6 +70,7 @@ import javax.servlet.ServletConfig;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
+import javax.servlet.annotation.WebInitParam;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -87,16 +88,20 @@ import javax.servlet.http.Part;
     maxRequestSize = 1L << 26, // ~64MB
     fileSizeThreshold = 1 << 23, // ~8MB
     location = "/tmp")
-@WebServlet(value = "/w/decode", loadOnStartup = 1)
+@WebServlet(value = "/w/decode", loadOnStartup = 1, initParams = {
+  @WebInitParam(name = "maxAccessPerTime", value = "120"),
+  @WebInitParam(name = "accessTimeSec", value = "120"),
+  @WebInitParam(name = "maxEntries", value = "100000")
+})
 public final class DecodeServlet extends HttpServlet {
 
   private static final Logger log = Logger.getLogger(DecodeServlet.class.getName());
 
+  private static final Pattern WHITESPACE = Pattern.compile("\\s+");
   // No real reason to let people upload more than ~64MB
   private static final long MAX_IMAGE_SIZE = 1L << 26;
   // No real reason to deal with more than ~32 megapixels
   private static final int MAX_PIXELS = 1 << 25;
-  private static final byte[] REMAINDER_BUFFER = new byte[1 << 16];
   private static final Map<DecodeHintType,Object> HINTS;
   private static final Map<DecodeHintType,Object> HINTS_PURE;
 
@@ -108,7 +113,7 @@ public final class DecodeServlet extends HttpServlet {
     HINTS_PURE.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
   }
 
-  private Iterable<String> blockedURLSubstrings;
+  private Collection<String> blockedURLSubstrings;
   private Timer timer;
   private DoSTracker destHostTracker;
 
@@ -130,8 +135,14 @@ public final class DecodeServlet extends HttpServlet {
       log.info("Blocking URIs containing: " + blockedURLSubstrings);
     }
 
-    timer = new Timer("DecodeServlet");
-    destHostTracker = new DoSTracker(timer, 500, TimeUnit.MILLISECONDS.convert(5, TimeUnit.MINUTES), 10_000);
+    int maxAccessPerTime = Integer.parseInt(servletConfig.getInitParameter("maxAccessPerTime"));
+    int accessTimeSec = Integer.parseInt(servletConfig.getInitParameter("accessTimeSec"));
+    long accessTimeMS = TimeUnit.MILLISECONDS.convert(accessTimeSec, TimeUnit.SECONDS);
+    int maxEntries = Integer.parseInt(servletConfig.getInitParameter("maxEntries"));
+
+    String name = getClass().getSimpleName();
+    timer = new Timer(name);
+    destHostTracker = new DoSTracker(timer, name, maxAccessPerTime, accessTimeMS, maxEntries, null);
   }
 
   @Override
@@ -152,12 +163,16 @@ public final class DecodeServlet extends HttpServlet {
       return;
     }
 
-    imageURIString = imageURIString.trim();
-    for (CharSequence substring : blockedURLSubstrings) {
-      if (imageURIString.contains(substring)) {
-        log.info("Disallowed URI " + imageURIString);
-        errorResponse(request, response, "badurl");
-        return;
+    // Remove any whitespace to sanitize; none is valid anyway
+    imageURIString = WHITESPACE.matcher(imageURIString).replaceAll("");
+
+    if (!blockedURLSubstrings.isEmpty()) {
+      for (CharSequence substring : blockedURLSubstrings) {
+        if (imageURIString.contains(substring)) {
+          log.info("Disallowed URI " + imageURIString);
+          errorResponse(request, response, "badurl");
+          return;
+        }
       }
     }
 
@@ -173,15 +188,16 @@ public final class DecodeServlet extends HttpServlet {
       errorResponse(request, response, "badurl");
       return;
     }
-    
+
     // Shortcut for data URI
     if ("data".equals(imageURI.getScheme())) {
-      BufferedImage image = null;
+      BufferedImage image;
       try {
         image = ImageReader.readDataURIImage(imageURI);
-      } catch (IOException | IllegalStateException e) {
+      } catch (Exception e) {
         log.info("Error " + e + " while reading data URI: " + imageURIString);
         errorResponse(request, response, "badurl");
+        return;
       }
       if (image == null) {
         log.info("Couldn't read data URI: " + imageURIString);
@@ -195,8 +211,17 @@ public final class DecodeServlet extends HttpServlet {
       }
       return;
     }
-    
-    URL imageURL;    
+
+    String host = imageURI.getHost();
+    // Also should parse for 172.x subnets
+    if (host == null || host.startsWith("10.") || host.startsWith("192.168.") ||
+        "127.0.0.1".equals(host) || "localhost".equals(host) ||
+        destHostTracker.isBanned(host)) {
+      errorResponse(request, response, "badurl");
+      return;
+    }
+
+    URL imageURL;
     try {
       imageURL = imageURI.toURL();
     } catch (MalformedURLException ignored) {
@@ -210,11 +235,6 @@ public final class DecodeServlet extends HttpServlet {
       log.info("URL protocol was not valid: " + imageURIString);
       errorResponse(request, response, "badurl");
       return;
-    }
-
-    if (destHostTracker.isBanned(imageURL.getHost())) {
-      log.info("Temporarily not requesting from host: " + imageURIString);
-      errorResponse(request, response, "badurl");
     }
 
     HttpURLConnection connection;
@@ -235,7 +255,7 @@ public final class DecodeServlet extends HttpServlet {
 
     try {
       connection.connect();
-    } catch (IOException | IllegalArgumentException e) {
+    } catch (Exception e) {
       // Encompasses lots of stuff, including
       //  java.net.SocketException, java.net.UnknownHostException,
       //  javax.net.ssl.SSLPeerUnverifiedException,
@@ -247,30 +267,26 @@ public final class DecodeServlet extends HttpServlet {
     }
 
     try (InputStream is = connection.getInputStream()) {
-      try {
-        if (connection.getResponseCode() != HttpServletResponse.SC_OK) {
-          log.info("Unsuccessful return code " + connection.getResponseCode() + " from " + imageURIString);
-          errorResponse(request, response, "badurl");
-          return;
-        }
-        if (connection.getHeaderFieldInt(HttpHeaders.CONTENT_LENGTH, 0) > MAX_IMAGE_SIZE) {
-          log.info("Too large: " + imageURIString);
-          errorResponse(request, response, "badimage");
-          return;
-        }
-        // Assume we'll only handle image/* content types
-        String contentType = connection.getContentType();
-        if (contentType != null && !contentType.startsWith("image/")) {
-          log.info("Wrong content type " + contentType + ": " + imageURIString);
-          errorResponse(request, response, "badimage");
-          return;
-        }
-
-        log.info("Decoding " + imageURIString);
-        processStream(is, request, response);
-      } finally {
-        consumeRemainder(is);
+      if (connection.getResponseCode() != HttpServletResponse.SC_OK) {
+        log.info("Unsuccessful return code " + connection.getResponseCode() + " from " + imageURIString);
+        errorResponse(request, response, "badurl");
+        return;
       }
+      if (connection.getHeaderFieldInt(HttpHeaders.CONTENT_LENGTH, 0) > MAX_IMAGE_SIZE) {
+        log.info("Too large: " + imageURIString);
+        errorResponse(request, response, "badimage");
+        return;
+      }
+      // Assume we'll only handle image/* content types
+      String contentType = connection.getContentType();
+      if (contentType != null && !contentType.startsWith("image/")) {
+        log.info("Wrong content type " + contentType + ": " + imageURIString);
+        errorResponse(request, response, "badimage");
+        return;
+      }
+
+      log.info("Decoding " + imageURIString);
+      processStream(is, request, response);
     } catch (IOException ioe) {
       log.info("Error " + ioe + " processing " + imageURIString);
       errorResponse(request, response, "badurl");
@@ -280,29 +296,15 @@ public final class DecodeServlet extends HttpServlet {
 
   }
 
-  private static void consumeRemainder(InputStream is) {
-    try {
-      while (is.read(REMAINDER_BUFFER) > 0) {
-        // don't care about value, or collision
-      }
-    } catch (IOException | IndexOutOfBoundsException ioe) {
-      // sun.net.www.http.ChunkedInputStream.read is throwing IndexOutOfBoundsException
-      // continue
-    }
-  }
-
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response)
       throws ServletException, IOException {
     Collection<Part> parts;
     try {
       parts = request.getParts();
-    } catch (IllegalStateException ise) {
-      log.info("File upload was too large or invalid");
-      errorResponse(request, response, "badimage");
-      return;
-    } catch (IOException ioe) {
-      log.info(ioe.toString());
+    } catch (Exception e) {
+      // Includes IOException, InvalidContentTypeException, other parsing IllegalStateException
+      log.info(e.toString());
       errorResponse(request, response, "badimage");
       return;
     }
@@ -331,9 +333,9 @@ public final class DecodeServlet extends HttpServlet {
     BufferedImage image;
     try {
       image = ImageIO.read(is);
-    } catch (IOException | CMMException | IllegalArgumentException ioe) {
-      log.info(ioe.toString());
-      // Have seen these in some logs
+    } catch (Exception e) {
+      // Many possible failures from JAI, so just catch anything as a failure
+      log.info(e.toString());
       errorResponse(request, response, "badimage");
       return;
     }
@@ -355,7 +357,7 @@ public final class DecodeServlet extends HttpServlet {
       image.flush();
     }
   }
-  
+
   private static void processImage(BufferedImage image,
                                    HttpServletRequest request,
                                    HttpServletResponse response) throws IOException, ServletException {
@@ -378,7 +380,7 @@ public final class DecodeServlet extends HttpServlet {
       } catch (ReaderException re) {
         savedException = re;
       }
-  
+
       if (results.isEmpty()) {
         try {
           // Look for pure barcode
@@ -390,7 +392,7 @@ public final class DecodeServlet extends HttpServlet {
           savedException = re;
         }
       }
-  
+
       if (results.isEmpty()) {
         try {
           // Look for normal barcode in photo
@@ -402,7 +404,7 @@ public final class DecodeServlet extends HttpServlet {
           savedException = re;
         }
       }
-  
+
       if (results.isEmpty()) {
         try {
           // Try again with other binarizer
@@ -415,15 +417,13 @@ public final class DecodeServlet extends HttpServlet {
           savedException = re;
         }
       }
-  
+
       if (results.isEmpty()) {
         try {
           throw savedException == null ? NotFoundException.getNotFoundInstance() : savedException;
         } catch (FormatException | ChecksumException e) {
-          log.info(e.toString());
           errorResponse(request, response, "format");
         } catch (ReaderException e) { // Including NotFoundException
-          log.info(e.toString());
           errorResponse(request, response, "notfound");
         }
         return;

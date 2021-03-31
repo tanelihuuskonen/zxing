@@ -20,7 +20,7 @@ import com.google.zxing.FormatException;
 import com.google.zxing.common.BitSource;
 import com.google.zxing.common.DecoderResult;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -185,7 +185,7 @@ final class DecodedBitStreamParser {
           default:
             // Not to be used in ASCII encodation
             // but work around encoders that end with 254, latch back to ASCII
-            if (oneByte >= 242 && (oneByte != 254 || bits.available() != 0)) {
+            if (oneByte != 254 || bits.available() != 0) {
               throw FormatException.getFormatInstance();
             }
             break;
@@ -505,11 +505,7 @@ final class DecodedBitStreamParser {
       bytes[i] = (byte) unrandomize255State(bits.readBits(8), codewordPosition++);
     }
     byteSegments.add(bytes);
-    try {
-      result.append(new String(bytes, "ISO8859_1"));
-    } catch (UnsupportedEncodingException uee) {
-      throw new IllegalStateException("Platform does not support required encoding: " + uee);
-    }
+    result.append(new String(bytes, StandardCharsets.ISO_8859_1));
   }
 
   /**

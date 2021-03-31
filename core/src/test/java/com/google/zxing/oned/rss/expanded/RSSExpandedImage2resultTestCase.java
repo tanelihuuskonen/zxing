@@ -61,7 +61,7 @@ import org.junit.Test;
 public final class RSSExpandedImage2resultTestCase extends Assert {
 
   @Test
-  public void testDecodeRow2result_2() throws Exception {
+  public void testDecodeRow2result2() throws Exception {
     // (01)90012345678908(3103)001750
     ExpandedProductParsedResult expected =
         new ExpandedProductParsedResult("(01)90012345678908(3103)001750",
@@ -69,7 +69,7 @@ public final class RSSExpandedImage2resultTestCase extends Assert {
                                         null, null, null, null, null, null,
                                         "001750",
                                         ExpandedProductParsedResult.KILOGRAM,
-                                        "3", null, null, null, new HashMap<String,String>());
+                                        "3", null, null, null, new HashMap<>());
 
     assertCorrectImage2result("2.png", expected);
   }

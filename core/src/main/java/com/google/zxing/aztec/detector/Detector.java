@@ -524,8 +524,8 @@ public final class Detector {
    * @param newSide the new length of the size of the square in the target bit matrix
    * @return the corners of the expanded square
    */
-  private static ResultPoint[] expandSquare(ResultPoint[] cornerPoints, float oldSide, float newSide) {
-    float ratio = newSide / (2 * oldSide);
+  private static ResultPoint[] expandSquare(ResultPoint[] cornerPoints, int oldSide, int newSide) {
+    float ratio = newSide / (2.0f * oldSide);
     float dx = cornerPoints[0].getX() - cornerPoints[2].getX();
     float dy = cornerPoints[0].getY() - cornerPoints[2].getY();
     float centerx = (cornerPoints[0].getX() + cornerPoints[2].getX()) / 2.0f;
@@ -566,10 +566,7 @@ public final class Detector {
     if (compact) {
       return 4 * nbLayers + 11;
     }
-    if (nbLayers <= 4) {
-      return 4 * nbLayers + 15;
-    }
-    return 4 * nbLayers + 2 * ((nbLayers - 4) / 8 + 1) + 15;
+    return 4 * nbLayers + 2 * ((2 * nbLayers + 6) / 15) + 15;
   }
 
   static final class Point {
@@ -577,7 +574,7 @@ public final class Detector {
     private final int y;
 
     ResultPoint toResultPoint() {
-      return new ResultPoint(getX(), getY());
+      return new ResultPoint(x, y);
     }
 
     Point(int x, int y) {

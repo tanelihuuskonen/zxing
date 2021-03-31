@@ -17,11 +17,10 @@
 package com.google.zxing.oned;
 
 import com.google.zxing.BarcodeFormat;
-import com.google.zxing.EncodeHintType;
-import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 
-import java.util.Map;
+import java.util.Collection;
+import java.util.Collections;
 
 /**
  * This object renders a CODE39 code as a {@link BitMatrix}.
@@ -31,15 +30,8 @@ import java.util.Map;
 public final class Code39Writer extends OneDimensionalCodeWriter {
 
   @Override
-  public BitMatrix encode(String contents,
-                          BarcodeFormat format,
-                          int width,
-                          int height,
-                          Map<EncodeHintType,?> hints) throws WriterException {
-    if (format != BarcodeFormat.CODE_39) {
-      throw new IllegalArgumentException("Can only encode CODE_39, but got " + format);
-    }
-    return super.encode(contents, format, width, height, hints);
+  protected Collection<BarcodeFormat> getSupportedWriteFormats() {
+    return Collections.singleton(BarcodeFormat.CODE_39);
   }
 
   @Override
@@ -64,14 +56,7 @@ public final class Code39Writer extends OneDimensionalCodeWriter {
     }
 
     int[] widths = new int[9];
-    int codeWidth = 24 + 1 + length;
-    for (int i = 0; i < length; i++) {
-      int indexInString = Code39Reader.ALPHABET_STRING.indexOf(contents.charAt(i));
-      toIntArray(Code39Reader.CHARACTER_ENCODINGS[indexInString], widths);
-      for (int width : widths) {
-        codeWidth += width;
-      }
-    }
+    int codeWidth = 24 + 1 + (13 * length);
     boolean[] result = new boolean[codeWidth];
     toIntArray(Code39Reader.ASTERISK_ENCODING, widths);
     int pos = appendPattern(result, 0, widths, true);
@@ -117,33 +102,34 @@ public final class Code39Writer extends OneDimensionalCodeWriter {
            extendedContent.append("%W");
            break;
          default:
-           if (character > 0 && character < 27) {
+           if (character <= 26) {
              extendedContent.append('$');
              extendedContent.append((char) ('A' + (character - 1)));
-           } else if (character > 26 && character < ' ') {
+           } else if (character < ' ') {
              extendedContent.append('%');
              extendedContent.append((char) ('A' + (character - 27)));
-           } else if ((character > ' ' && character < '-') || character == '/' || character == ':') {
+           } else if (character <= ',' || character == '/' || character == ':') {
              extendedContent.append('/');
              extendedContent.append((char) ('A' + (character - 33)));
-           } else if (character > '/' && character < ':') {
+           } else if (character <= '9') {
              extendedContent.append((char) ('0' + (character - 48)));
-           } else if (character > ':' && character < '@') {
+           } else if (character <= '?') {
              extendedContent.append('%');
              extendedContent.append((char) ('F' + (character - 59)));
-           } else if (character > '@' && character < '[') {
+           } else if (character <= 'Z') {
              extendedContent.append((char) ('A' + (character - 65)));
-           } else if (character > 'Z' && character < '`') {
+           } else if (character <= '_') {
              extendedContent.append('%');
              extendedContent.append((char) ('K' + (character - 91)));
-           } else if (character > '`' && character < '{') {
+           } else if (character <= 'z') {
              extendedContent.append('+');
              extendedContent.append((char) ('A' + (character - 97)));
-           } else if (character > 'z' && character < 128) {
+           } else if (character <= 127) {
              extendedContent.append('%');
              extendedContent.append((char) ('P' + (character - 123)));
            } else {
-             throw new IllegalArgumentException("Requested content contains a non-encodable character: '" + contents.charAt(i) + "'");
+             throw new IllegalArgumentException(
+               "Requested content contains a non-encodable character: '" + contents.charAt(i) + "'");
            }
            break;
        }

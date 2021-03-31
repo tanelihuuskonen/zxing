@@ -23,7 +23,7 @@ import com.google.zxing.common.CharacterSetECI;
 import com.google.zxing.common.DecoderResult;
 import com.google.zxing.common.StringUtils;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -160,7 +160,7 @@ final class DecodedBitStreamParser {
       // Each 13 bits encodes a 2-byte character
       int twoBytes = bits.readBits(13);
       int assembledTwoBytes = ((twoBytes / 0x060) << 8) | (twoBytes % 0x060);
-      if (assembledTwoBytes < 0x003BF) {
+      if (assembledTwoBytes < 0x00A00) {
         // In the 0xA1A1 to 0xAAFE range
         assembledTwoBytes += 0x0A1A1;
       } else {
@@ -173,11 +173,7 @@ final class DecodedBitStreamParser {
       count--;
     }
 
-    try {
-      result.append(new String(buffer, StringUtils.GB2312));
-    } catch (UnsupportedEncodingException ignored) {
-      throw FormatException.getFormatInstance();
-    }
+    result.append(new String(buffer, StringUtils.GB2312_CHARSET));
   }
 
   private static void decodeKanjiSegment(BitSource bits,
@@ -208,12 +204,7 @@ final class DecodedBitStreamParser {
       offset += 2;
       count--;
     }
-    // Shift_JIS may not be supported in some environments:
-    try {
-      result.append(new String(buffer, StringUtils.SHIFT_JIS));
-    } catch (UnsupportedEncodingException ignored) {
-      throw FormatException.getFormatInstance();
-    }
+    result.append(new String(buffer, StringUtils.SHIFT_JIS_CHARSET));
   }
 
   private static void decodeByteSegment(BitSource bits,
@@ -231,22 +222,18 @@ final class DecodedBitStreamParser {
     for (int i = 0; i < count; i++) {
       readBytes[i] = (byte) bits.readBits(8);
     }
-    String encoding;
+    Charset encoding;
     if (currentCharacterSetECI == null) {
       // The spec isn't clear on this mode; see
       // section 6.4.5: t does not say which encoding to assuming
       // upon decoding. I have seen ISO-8859-1 used as well as
       // Shift_JIS -- without anything like an ECI designator to
       // give a hint.
-      encoding = StringUtils.guessEncoding(readBytes, hints);
+      encoding = StringUtils.guessCharset(readBytes, hints);
     } else {
-      encoding = currentCharacterSetECI.name();
+      encoding = currentCharacterSetECI.getCharset();
     }
-    try {
-      result.append(new String(readBytes, encoding));
-    } catch (UnsupportedEncodingException ignored) {
-      throw FormatException.getFormatInstance();
-    }
+    result.append(new String(readBytes, encoding));
     byteSegments.add(readBytes);
   }
 

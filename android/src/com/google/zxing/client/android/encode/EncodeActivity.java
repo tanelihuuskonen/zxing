@@ -112,7 +112,7 @@ public final class EncodeActivity extends Activity {
         return false;
     }
   }
-  
+
   private void share() {
     QRCodeEncoder encoder = qrCodeEncoder;
     if (encoder == null) { // Odd
@@ -145,14 +145,10 @@ public final class EncodeActivity extends Activity {
       return;
     }
     File barcodeFile = new File(barcodesRoot, makeBarcodeFileName(contents) + ".png");
-    if (!barcodeFile.delete()) {
-      Log.w(TAG, "Could not delete " + barcodeFile);
-      // continue anyway
-    }
     try (FileOutputStream fos = new FileOutputStream(barcodeFile)) {
       bitmap.compress(Bitmap.CompressFormat.PNG, 0, fos);
     } catch (IOException ioe) {
-      Log.w(TAG, "Couldn't access file " + barcodeFile + " due to " + ioe);
+      Log.w(TAG, "Couldn't access barcode file", ioe);
       showErrorMessage(R.string.msg_unmount_usb);
       return;
     }
@@ -184,7 +180,7 @@ public final class EncodeActivity extends Activity {
     display.getSize(displaySize);
     int width = displaySize.x;
     int height = displaySize.y;
-    int smallerDimension = width < height ? width : height;
+    int smallerDimension = Math.min(width, height);
     smallerDimension = smallerDimension * 7 / 8;
 
     Intent intent = getIntent();
